@@ -1,0 +1,78 @@
+services:
+    elasticsearch:
+        container_name: es_elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:${LOG_VERSION}
+        ports:
+          - "9200:9200"
+        volumes:
+          - ./es-data:/usr/share/elasticsearch/data
+          # - ./es-config:/usr/share/elasticsearch/config
+        environment:
+          - discovery.type=single-node
+          - xpack.security.enabled=true
+          - xpack.security.enrollment.enabled=true
+        networks:
+          - es-network
+
+    kibana:
+        container_name: es_kibana
+        image: docker.elastic.co/kibana/kibana:${LOG_VERSION}
+        ports:
+          - "5601:5601"
+        volumes:
+          - ./kibana/kibana.yml:/usr/share/kibana/config/kibana.yml
+        environment:
+          - ELASTICSEARCH_HOSTS=["http://elasticsearch:9200"]
+          - KIBANA_USERNAME=${KIBANA_USERNAME}
+          - KIBANA_PASSWORD=${KIBANA_PASSWORD}
+        depends_on:
+          - elasticsearch
+        networks:
+          - es-network
+
+    filebeat:
+        image: docker.elastic.co/beats/filebeat:${LOG_VERSION}
+        user: root
+        container_name: es_filebeat
+        command: filebeat -e -strict.perms=false
+        volumes:
+            - /Volumes/DATA/namtn/Odoo/odoo-17/log:/src/logs/odoo_logs
+            - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml
+            # - /Volumes/DATA/namtn/Odoo/odoo-17/monitor/log-system/docker-compose.yml
+        # depends_on:
+        #     - elasticsearch
+        #     - kibana
+        networks:
+          - es-network
+
+    metricbeat:
+        image: docker.elastic.co/beats/metricbeat:${LOG_VERSION}
+        container_name: es_metricbeat
+        user: root
+        # configs:
+        # - source: fb_config
+        #   target: /monitor/log-system/filebeat/filebeat.yml
+        environment:
+          ELASTICSEARCH_HOST: http://elasticsearch:9200
+          KIBANA_HOST: http://kibana:5601
+          ELASTICSEARCH_USERNAME: ${BEAT_USER}
+          ELASTICSEARCH_PASSWORD: ${BEAT_PASSWORD}
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+          - ./metric-data:/usr/share/metricbeat/data
+          - /var/log/:/var/log/:ro
+          - ./metricbeat/metricbeat.docker.yml:/usr/share/metricbeat/metricbeat.yml
+          # - /var/log/audit/:/var/log/audit/:ro
+        command: ["--strict.perms=false"]
+        networks:
+          - es-network
+
+
+networks:
+    es-network:
+        # ipam:
+        #   config:
+        #     - subnet: 172.31.0.0/16
+# volumes:
+#     redis_insight_volume_data:
+#     redis_data:

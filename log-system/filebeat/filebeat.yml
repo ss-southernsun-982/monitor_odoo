@@ -1,0 +1,71 @@
+name: "odoo_crm"
+logging.metrics.enabled: true
+xpack.security.enabled: true
+xpack.monitoring.enabled: true
+setup.ilm.enabled: true
+setup.template.enabled: false
+input.scan.close_eof: true
+input.scan.close_timeout: 5s
+
+filebeat.inputs:
+  # - type: docker
+  #   containers.ids:
+  #     - 'ce0a763d594e'  # Replace with the actual container ID or name
+  #   processors:
+  #     - add_kubernetes_metadata:
+  #         in_cluster: true
+
+  - type: log
+    scan_frequency: 1s
+    enabled: true
+    paths:
+      - /src/logs/odoo_logs/*.log
+    fields:
+      - service: nutifood_2024_03_26
+      - log_type: odoo
+      - log_format: plain
+    fields_under_root: true
+    multiline.pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \d+'
+    multiline.negate: true
+    multiline.match: after
+    json:
+      message_key: message
+      keys_under_root: true
+      overwrite_keys: true
+      timestamp_key: log.date
+      timestamp_format: "yyyy-MM-dd HH:mm:ss,SSS"
+
+processors:
+  - dissect:
+      field: message
+      target_prefix: ""
+      tokenizer: "%{+date} %{+date},%{+date} %{node_name} %{log_level} %{logger}: %{message}"
+      pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \d+ \w+ \w+: (?<log_message>.*)$'
+      overwrite_keys: true
+
+  - script:
+      lang: javascript
+      source: >
+        function process(evt) {
+          var ts = evt.Get('date').replace(',', '.');
+          evt.Put('date', ts);
+        }
+
+  - timestamp:
+      field: "date"
+      layouts:
+        - "2006-01-02 15:04:05.999"
+
+  - add_fields:
+      target: ""
+      fields:
+        system: "odoo_worker_1"
+
+setup.kibana.host:
+  hosts: kibana:5601
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "odoo_crm_17"
+  username: "elastic"
+  password: "ESX-7O5WH2h*fa30AQBR"
